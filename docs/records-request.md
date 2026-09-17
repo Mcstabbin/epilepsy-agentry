@@ -34,7 +34,12 @@ its own export quirks.
 ea inspect  recording.edf
 ea transcode recording.edf data/rec001.zarr
 ea features data/rec001.zarr data/rec001_l1.parquet
-ea candidates data/rec001.zarr data/rec001_l1.parquet
+ea candidates data/rec001.zarr --l1-parquet data/rec001_l1.parquet
+ea review data/rec001.zarr data/rec001-review
 ```
 
 Keep everything under `data/`. It is gitignored.
+
+The review packet organizes annotations and reference signal previews. It does not
+establish which events were seizures. Pair it with the final clinical report and the
+person's own questions; see [helping your friend](helping-your-friend.md).

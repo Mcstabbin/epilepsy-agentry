@@ -11,5 +11,5 @@ needs:
   features: [bp_theta, bp_alpha, bp_beta, line_length]
   window: core
 claim_types: [onset_region, onset_time, spread_pattern]
-prompt_file: aspects/prompts/onset_lateralization.md
+prompt_file: prompts/onset_lateralization.md
 max_scope_calls: 8

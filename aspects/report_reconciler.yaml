@@ -8,5 +8,5 @@ trigger:
 needs:
   channels: []
 claim_types: [agrees_with_report, disagrees_with_report, not_addressed_by_report]
-prompt_file: aspects/prompts/report_reconciler.md
+prompt_file: prompts/report_reconciler.md
 max_scope_calls: 0

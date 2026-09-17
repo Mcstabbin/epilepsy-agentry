@@ -13,6 +13,6 @@ needs:
   window: core
 claim_types: [artifact_explains_event, artifact_partial, artifact_unlikely]
 confidence_semantics: >
-  Probability that the non-cerebral explanation accounts for the flagged activity.
-prompt_file: aspects/prompts/artifact_adversary.md
+  Uncalibrated strength of support for the proposed artifact explanation, not a probability.
+prompt_file: prompts/artifact_adversary.md
 max_scope_calls: 6

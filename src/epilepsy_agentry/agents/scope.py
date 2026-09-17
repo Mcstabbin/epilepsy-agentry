@@ -1,14 +1,14 @@
 """The scope tool.
 
-Every agent gets scope(segment, montage, filter, render). It returns a bounded feature
-summary, rendered images, and stats for exactly that segment. This is what stops agents
-from confabulating about signal they cannot see: if an agent wants to check whether onset
-is really left-temporal, it calls scope with a bipolar montage and looks.
+The tool returns bounded statistics, reference plots, and a persistent evidence record.
+A citation proves which evidence was supplied, not that an interpretation is correct.
+Backends must actually deliver image content to models that interpret the plots.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -49,11 +49,16 @@ def _apply_montage(x: np.ndarray, names: list[str], montage: str) -> tuple[np.nd
             if a.upper() in idx and b.upper() in idx:
                 rows.append(x[idx[a.upper()]] - x[idx[b.upper()]])
                 out.append(f"{a}-{b}")
-        return np.vstack(rows) if rows else x, out or names
+        if not rows:
+            raise ValueError("no channel pairs available for bipolar_longitudinal montage")
+        return np.vstack(rows), out
     raise ValueError(f"unknown montage {montage!r}")
 
 
-def _bandpass(x: np.ndarray, sfreq: float, lo: float | None, hi: float | None) -> np.ndarray:
+def _bandpass(
+    x: np.ndarray, sfreq: float, lo: float | None, hi: float | None,
+    notch: float | None = None,
+) -> np.ndarray:
     n = x.shape[-1]
     f = np.fft.rfftfreq(n, 1 / sfreq)
     X = np.fft.rfft(x, axis=-1)
@@ -62,6 +67,8 @@ def _bandpass(x: np.ndarray, sfreq: float, lo: float | None, hi: float | None) -
         m &= f >= lo
     if hi:
         m &= f <= hi
+    if notch is not None:
+        m &= np.abs(f - notch) > max(0.5, sfreq / n / 2)
     X[..., ~m] = 0
     return np.fft.irfft(X, n=n, axis=-1)
 
@@ -72,9 +79,16 @@ def scope(
     render_dir: Path | None = None,
     render: bool = True,
 ) -> ScopeResult:
+    seg = Segment.model_validate({**seg.model_dump(),
+                                  "source_sha256": seg.source_sha256 or store.source_sha256})
+    if seg.duration > 120:
+        raise ValueError("scope is limited to 120 seconds per call; request a smaller window")
     x, names = store.read(seg)
+    if not np.isfinite(x).all():
+        raise ValueError("scope contains non-finite samples")
     x = x.astype(np.float64)
-    x = _bandpass(x, store.sfreq, seg.filter.highpass_hz, seg.filter.lowpass_hz)
+    x = _bandpass(x, store.sfreq, seg.filter.highpass_hz, seg.filter.lowpass_hz,
+                  seg.filter.notch_hz)
     x, names = _apply_montage(x, names, seg.montage)
 
     n = x.shape[-1]
@@ -90,9 +104,12 @@ def scope(
             "dominant_hz": dom,
         }
 
-    call_id = hashlib.sha256((seg.uri() + str(render)).encode()).hexdigest()[:12]
+    call_id = hashlib.sha256(("scope-v1:" + seg.uri() + str(render)).encode()).hexdigest()[:16]
     res = ScopeResult(call_id=call_id, segment_uri=seg.uri(), montage=seg.montage,
                       channel_names=names, stats=stats)
+    res.notes.append("Reference FFT filter; edge effects are possible. Not a clinical EEG viewer.")
+    if seg.montage == "bipolar_longitudinal":
+        res.notes.append("Only available channel pairs are shown; check channel_names for coverage.")
 
     if render and render_dir is not None:
         try:
@@ -117,4 +134,10 @@ def scope(
             res.traces_png = str(p)
         except ImportError:
             res.notes.append("matplotlib not installed; no render")
+    if render_dir is not None:
+        render_dir.mkdir(parents=True, exist_ok=True)
+        (render_dir / f"{call_id}.json").write_text(
+            json.dumps({"scope_version": "scope-v1", "segment": seg.model_dump(),
+                        "result": res.model_dump()}, indent=2), encoding="utf-8",
+        )
     return res

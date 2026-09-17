@@ -13,6 +13,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
+from ..segment import Montage
+
 
 class Trigger(BaseModel):
     when: Literal["candidate", "every_candidate", "recording", "claim"] = "candidate"
@@ -23,7 +25,7 @@ class Trigger(BaseModel):
 
 class Needs(BaseModel):
     channels: list[str] | Literal["all"] = "all"
-    montage: str = "referential"
+    montage: Montage = "referential"
     features: list[str] = []  # L1 columns this aspect reads
     physio: list[str] = []  # "ecg", "hr", "hrv", "accel"
     video: bool = False
@@ -39,11 +41,15 @@ class AspectManifest(BaseModel):
     claim_types: list[str] = Field(min_length=1)
     confidence_semantics: str = "0 = no support in evidence, 1 = unambiguous in scoped signal"
     prompt_file: str
-    max_scope_calls: int = 8  # cost bound per invocation
+    max_scope_calls: int = Field(default=8, ge=0, le=100)
+    max_backend_calls: int = Field(default=12, ge=1, le=100)
+    max_scope_duration_s: float = Field(default=60.0, gt=0, le=120, allow_inf_nan=False)
 
     @classmethod
     def from_yaml(cls, path: Path) -> AspectManifest:
-        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+        manifest = cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+        manifest.prompt_file = str((path.parent / manifest.prompt_file).resolve())
+        return manifest
 
 
 def load_manifests(aspects_dir: Path) -> list[AspectManifest]:

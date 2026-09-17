@@ -11,5 +11,5 @@ needs:
   physio: [ecg, hr, hrv]
   window: context
 claim_types: [preictal_hr_change, preictal_hrv_change, no_autonomic_signal]
-prompt_file: aspects/prompts/preictal_autonomic.md
+prompt_file: prompts/preictal_autonomic.md
 max_scope_calls: 4

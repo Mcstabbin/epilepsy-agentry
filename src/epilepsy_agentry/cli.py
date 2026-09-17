@@ -70,5 +70,32 @@ def conflicts(claims_path: Path = Path("data/claims.jsonl")):
             typer.echo(f"  [{c.aspect} {c.confidence:.2f}] {c.assertion}")
 
 
+@app.command()
+def demo(output_dir: Path = Path("data/demo"), seed: int = 7):
+    """Run six synthetic events through local processing and two demonstration agents."""
+    from .demo import run_demo
+
+    try:
+        report = run_demo(output_dir, seed)
+    except FileExistsError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"Synthetic demo complete. Open {report.resolve()}")
+
+
+@app.command()
+def review(zarr_in: Path, output_dir: Path, claims_path: Path | None = None):
+    """Create a local HTML/JSON review packet from recording annotations."""
+    from .detectors import assemble_candidates
+    from .review import write_review
+    from .store import CanonicalStore
+
+    store = CanonicalStore(zarr_in)
+    try:
+        report = write_review(store, assemble_candidates(store), output_dir, claims_path)
+    except (FileExistsError, FileNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"Review packet written. Open {report.resolve()}")
+
+
 if __name__ == "__main__":
     app()

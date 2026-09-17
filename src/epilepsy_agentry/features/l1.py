@@ -13,7 +13,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+import pyarrow as pa
+import pyarrow.parquet as pq
+from pydantic import BaseModel, Field
 
 from ..store import CanonicalStore
 
@@ -27,8 +29,8 @@ BANDS = {
 
 
 class L1Config(BaseModel):
-    window_s: float = 4.0
-    hop_s: float = 1.0
+    window_s: float = Field(default=4.0, gt=0, allow_inf_nan=False)
+    hop_s: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     version: str = "l1-v0"
 
 
@@ -71,28 +73,42 @@ def compute_l1(store: CanonicalStore, out_path: Path, cfg: L1Config | None = Non
     cfg = cfg or L1Config()
     sf = store.sfreq
     win, hop = int(cfg.window_s * sf), int(cfg.hop_s * sf)
+    if win < 3 or hop < 1:
+        raise ValueError("window must contain at least 3 samples; hop at least 1")
     eeg = store.root["eeg"]
     _n_ch, n = eeg.shape
-    rows = []
-    # read in blocks of 60 windows to bound memory while staying chunk-friendly
-    block_n = hop * 60 + win
-    for start in range(0, n - win, hop * 60):
-        blk = np.asarray(eeg[:, start : start + block_n], dtype=np.float64)
-        for w0 in range(0, blk.shape[1] - win + 1, hop):
-            x = blk[:, w0 : w0 + win]
-            t0 = (start + w0) / sf
-            feats = _window_features(x, sf)
-            for ci, ch in enumerate(store.ch_names):
-                row = {
-                    "recording_id": store.recording_id,
-                    "t0": t0,
-                    "t1": t0 + cfg.window_s,
-                    "channel": ch,
-                    "feature_version": cfg.version,
-                }
-                row.update({k: float(v[ci]) for k, v in feats.items()})
-                rows.append(row)
-    df = pd.DataFrame(rows)
+    if n < win:
+        raise ValueError("recording is shorter than one feature window")
+    if out_path.exists():
+        raise FileExistsError(f"refusing to overwrite {out_path}")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(out_path, index=False)
+    writer = None
+    try:
+        # Each block owns at most 60 starts. Read only the overlap those windows need.
+        for start in range(0, n - win + 1, hop * 60):
+            count = min(60, (n - win - start) // hop + 1)
+            stop = start + (count - 1) * hop + win
+            blk = np.asarray(eeg[:, start:stop], dtype=np.float64)
+            rows = []
+            for offset in range(count):
+                w0 = offset * hop
+                feats = _window_features(blk[:, w0:w0 + win], sf)
+                for ci, ch in enumerate(store.ch_names):
+                    row = {
+                        "recording_id": store.recording_id,
+                        "source_sha256": store.source_sha256 or "unknown",
+                        "t0": (start + w0) / sf,
+                        "t1": (start + w0 + win) / sf,
+                        "channel": ch,
+                        "feature_version": cfg.version,
+                    }
+                    row.update({k: float(v[ci]) for k, v in feats.items()})
+                    rows.append(row)
+            table = pa.Table.from_pandas(pd.DataFrame(rows), preserve_index=False)
+            if writer is None:
+                writer = pq.ParquetWriter(out_path, table.schema, compression="zstd")
+            writer.write_table(table)
+    finally:
+        if writer is not None:
+            writer.close()
     return out_path

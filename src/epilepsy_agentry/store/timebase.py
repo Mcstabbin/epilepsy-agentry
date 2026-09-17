@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ClockOffset(BaseModel):
@@ -23,11 +23,13 @@ class ClockOffset(BaseModel):
 
 class TimeAuthority(BaseModel):
     recording_id: str
-    origin_utc: datetime
-    sfreq: float
+    origin_utc: datetime | None
+    sfreq: float = Field(gt=0, allow_inf_nan=False)
     offsets: dict[str, ClockOffset] = {}
 
     def to_wall(self, t_s: float) -> datetime:
+        if self.origin_utc is None:
+            raise ValueError("recording has no known wall-clock origin")
         return datetime.fromtimestamp(self.origin_utc.timestamp() + t_s, tz=UTC)
 
     def to_sample(self, t_s: float) -> int:
