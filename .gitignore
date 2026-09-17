@@ -1,0 +1,16 @@
+# NEVER commit recordings or derived data. They are protected health information.
+data/
+*.edf
+*.edf+
+*.zarr/
+*.parquet
+*.mp4
+*.avi
+*.duckdb
+
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/

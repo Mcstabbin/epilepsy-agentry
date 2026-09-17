@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "epilepsy-agentry"
+version = "0.1.0"
+description = "Reduction pyramid + aspect-agent pool for personal EEG monitoring data"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "mne>=1.7",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "zarr>=3.0",
+  "duckdb>=1.0",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "typer>=0.12",
+  "matplotlib>=3.8",
+  "edfio>=0.4",
+]
+
+[project.optional-dependencies]
+physio = ["neurokit2>=0.2", "yasa>=0.6"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+ea = "epilepsy_agentry.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/epilepsy_agentry"]
+
+[tool.ruff]
+line-length = 100

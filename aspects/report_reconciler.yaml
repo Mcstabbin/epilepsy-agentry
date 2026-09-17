@@ -1,0 +1,12 @@
+name: report_reconciler
+description: >
+  Diffs the pipeline's claims against the epileptologist's formal read once it lands.
+  Runs over the recording, not per candidate.
+version: "0.1"
+trigger:
+  when: recording
+needs:
+  channels: []
+claim_types: [agrees_with_report, disagrees_with_report, not_addressed_by_report]
+prompt_file: aspects/prompts/report_reconciler.md
+max_scope_calls: 0

@@ -1,0 +1,18 @@
+name: artifact_adversary
+description: >
+  Tries to explain every candidate as movement, electrode pop, EMG, sweat, or
+  line noise rather than cerebral activity. Exists so the other aspects can be trusted.
+version: "0.1"
+trigger:
+  when: every_candidate
+needs:
+  channels: all
+  montage: referential
+  features: [quality, line_length, bp_gamma, hjorth_complexity]
+  physio: [accel]
+  window: core
+claim_types: [artifact_explains_event, artifact_partial, artifact_unlikely]
+confidence_semantics: >
+  Probability that the non-cerebral explanation accounts for the flagged activity.
+prompt_file: aspects/prompts/artifact_adversary.md
+max_scope_calls: 6
